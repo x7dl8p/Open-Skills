@@ -97,7 +97,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
     prefetchAll(): void {
         for (const repoItem of this.repoItems) {
             const cacheKey = `${repoItem.repo.owner}/${repoItem.repo.repo}@${repoItem.repo.branch}`;
-            if (this.treeCache.has(cacheKey)) { continue; }
+            if (this.treeCache.has(cacheKey) || repoItem.state === 'loading') { continue; }
 
             repoItem.state = 'loading';
             repoItem.updateDescription();
@@ -126,7 +126,6 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
         this.repoItems = this.repos.map(r => new RepoTreeItem(r));
         this.indexDirty = true;
         this._onDidChangeTreeData.fire();
-        this.prefetchAll();
     }
 
     setInstalledSkills(names: Set<string>): void {

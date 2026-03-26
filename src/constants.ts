@@ -135,4 +135,10 @@ export const DEFAULT_SKILL_REPOSITORIES: ReadonlyArray<{
             path: "",
             branch: "main"
         },
+        {
+            owner: "obra",
+            repo: "superpowers",
+            path: "skills",
+            branch: "main"
+        },
     ];

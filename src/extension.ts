@@ -8,7 +8,7 @@ import { SkillTreeProvider } from "./providers/SkillTreeProvider";
 import { MarketplaceTreeProvider, resolveGlobalSkillsPath } from "./providers/MarketplaceTreeProvider";
 import { MarketplaceSearchProvider } from "./providers/MarketplaceSearchProvider";
 import { GitHubSkillsClient } from "./github/GitHubSkillsClient";
-import { runOnboardingWizard } from "./onboarding/OnboardingWizard";
+
 import { showAboutPanel } from "./webviews/AboutPanel";
 import { GapAnalysisPanel } from "./webviews/GapAnalysisPanel";
 import { SkillViewPanel } from "./webviews/SkillViewPanel";
@@ -86,12 +86,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			showCollapseAll: true,
 		})
 	);
-	marketplaceProvider.prefetchAll();
 
 	const searchProvider = new MarketplaceSearchProvider(
 		context.extensionUri,
 		(query) => searchProvider.showResults(marketplaceProvider.searchSkills(query)),
 		(skill) => vscode.commands.executeCommand('open-skills.viewMarketplaceSkill', skill),
+		() => marketplaceProvider.prefetchAll()
 	);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
@@ -574,7 +574,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	try {
 		if (!config.onboardingCompleted) {
-			await runOnboardingWizard(configService);
+			await configService.setOnboardingCompleted(config.ideType, config.folderStructure);
+			vscode.window.showInformationMessage("expore the market palace to personalize you ai !");
 		}
 
 

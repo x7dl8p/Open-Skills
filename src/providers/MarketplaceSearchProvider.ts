@@ -11,12 +11,16 @@ export class MarketplaceSearchProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly onSearch: (query: string) => void,
         private readonly onOpen: (skill: MarketplaceSkill) => void,
+        private readonly onResolve?: () => void,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
         webviewView.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] };
         webviewView.webview.html = this.html();
+        if (this.onResolve) {
+            this.onResolve();
+        }
         webviewView.webview.onDidReceiveMessage(({ type, query, index }: { type: string; query: string; index: number }) => {
             if (type === 'search') { this.onSearch(query); }
             if (type === 'open' && this.lastResults[index]) { this.onOpen(this.lastResults[index].skill); }
