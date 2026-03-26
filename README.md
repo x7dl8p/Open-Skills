@@ -6,13 +6,13 @@ A skill manager to make AI actually useful! Discover, visualize, and synchronize
 
 Go to:
 
-<img width="653" height="233" alt="image" src="https://github.com/user-attachments/assets/69d641b2-23d0-4618-af0d-af2a3d71efca" />
+<img width="653" height="233" alt="image" src="assets/os-1.png" />
 
 Basic enough for everyone to use. For those needing documentation to understand how to use it, please don't bother using it!
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/be71a214-38f0-4b72-8ea9-2fe847bcb018" />
+<img width="1920" height="1080" alt="image" src="assets/os-2.png" />
 
 Dashboard:
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a7a0e455-f4ea-46ba-be83-500fefc264d8" />
+<img width="1920" height="1080" alt="image" src="assets/os-3.png" />
 
 ## Features
 
