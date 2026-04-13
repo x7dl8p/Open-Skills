@@ -42,6 +42,8 @@ export class SkillTreeItem extends vscode.TreeItem {
         this.tooltip = skill.source;
         if (skill.status === SkillStatus.Active) {
             this.contextValue = skill.isSynced ? "skillItem.active.synced" : "skillItem.active.unsynced";
+        } else if (skill.status === SkillStatus.Imported) {
+            this.contextValue = skill.isSynced ? "skillItem.imported.synced" : "skillItem.imported.unsynced";
         } else {
             this.contextValue = `skillItem.${skill.status}`;
         }

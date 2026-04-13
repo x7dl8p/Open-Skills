@@ -85,6 +85,19 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
     private indexedNames: string[] = [];
     private indexDirty = true;
 
+    private normalizeSkillName(name: string): string {
+        return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    private normalizeSkillPathKey(skillPath: string): string {
+        return this.normalizeSkillName(path.basename(skillPath));
+    }
+
+    private isInstalledMarketplaceSkill(name: string, skillPath: string): boolean {
+        return this.installedSkillNames.has(this.normalizeSkillName(name))
+            || this.installedSkillNames.has(this.normalizeSkillPathKey(skillPath));
+    }
+
     constructor(
         private readonly githubClient: GitHubSkillsClient,
         private readonly context: vscode.ExtensionContext
@@ -129,7 +142,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
     }
 
     setInstalledSkills(names: Set<string>): void {
-        this.installedSkillNames = names;
+        this.installedSkillNames = new Set(Array.from(names).map(n => this.normalizeSkillName(n)));
         this._onDidChangeTreeData.fire();
     }
 
@@ -154,7 +167,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
         return all
             .filter(s => rankMap.has(s.name))
             .sort((a, b) => (rankMap.get(a.name) ?? Infinity) - (rankMap.get(b.name) ?? Infinity))
-            .map(s => ({ skill: s, installed: this.installedSkillNames.has(s.name) }));
+            .map(s => ({ skill: s, installed: this.isInstalledMarketplaceSkill(s.name, s.skillPath) }));
     }
 
     getSkillByName(name: string): MarketplaceSkill | undefined {
@@ -189,7 +202,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
 
         if (element instanceof CategoryTreeItem) {
             return element.categoryNode.skills.map(node =>
-                new MarketplaceSkillTreeItem(node, this.installedSkillNames.has(node.name))
+                new MarketplaceSkillTreeItem(node, this.isInstalledMarketplaceSkill(node.name, node.skillPath))
             );
         }
 
@@ -226,7 +239,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
 
         if (categories.length === 1 && categories[0].name === '') {
             return categories[0].skills.map(node =>
-                new MarketplaceSkillTreeItem(node, this.installedSkillNames.has(node.name))
+                new MarketplaceSkillTreeItem(node, this.isInstalledMarketplaceSkill(node.name, node.skillPath))
             );
         }
 

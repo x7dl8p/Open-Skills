@@ -6,13 +6,13 @@ A skill manager to make AI actually useful! Discover, visualize, and synchronize
 
 Go to:
 
-<img width="653" height="233" alt="image" src="assets/os-1.png" />
+<img width="653" alt="image" src="assets/os-1.png" />
 
 Basic enough for everyone to use. For those needing documentation to understand how to use it, please don't bother using it!
-<img width="1920" height="1080" alt="image" src="assets/os-2.png" />
+<img width="1920"  alt="image" src="assets/os-2.png" />
 
 Dashboard:
-<img width="1920" height="1080" alt="image" src="assets/os-3.png" />
+<img width="1920" alt="image" src="assets/os-3.png" />
 
 ## Features
 
@@ -41,8 +41,13 @@ These repositories are indexed in the marketplace by default:
 | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | `source/skills` |
 | [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) | root |
 | [obra/superpowers](https://github.com/obra/superpowers) | `skills/` |
+| [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | `skills/` |
+| [sickn33/antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills) | `skills/` |
+| [github/awesome-copilot](https://github.com/github/awesome-copilot) | `skills/` |
 
 You can add your own repositories via the **Add Repository** button in the Marketplace panel.
+
+want to add yours ?, add the repo in the contants.ts file and raise a PR !
 
 ## Developer Notes
 

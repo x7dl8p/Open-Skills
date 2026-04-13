@@ -93,6 +93,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		(skill) => vscode.commands.executeCommand('open-skills.viewMarketplaceSkill', skill),
 		() => marketplaceProvider.prefetchAll()
 	);
+
+	const normalizeSkillKey = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+	const getFolderSkillKey = (skillPath: string): string => normalizeSkillKey(path.basename(path.dirname(skillPath)));
+	const getMarketplacePathKey = (skillPath: string): string => normalizeSkillKey(path.basename(skillPath));
+	const buildInstalledKeySet = (allSkills: SkillDefinition[]): Set<string> => {
+		const keys = new Set<string>();
+		for (const s of allSkills) {
+			if (s.status === "missing") {
+				continue;
+			}
+			keys.add(s.normalizedName);
+			keys.add(getFolderSkillKey(s.path));
+		}
+		return keys;
+	};
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			'openSkillsMarketplaceSearchView',
@@ -107,6 +122,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	let isScanning = false;
 	let scanQueued = false;
+	const importingSkillKeys = new Set<string>();
+	let isImportingAllMissing = false;
 
 	async function performScan(): Promise<void> {
 		if (isScanning) {
@@ -144,15 +161,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				const activeSkills = Array.from(new Map(activeSkillsRaw.map(s => [s.normalizedName, s])).values());
 				const globalSkills = Array.from(new Map(globalSkillsRaw.map(s => [s.normalizedName, s])).values());
 
+				const localKeys = new Set(activeSkills.map(s => s.normalizedName));
 				const globalKeys = new Set(globalSkills.map(s => s.normalizedName));
 				for (const local of activeSkills) {
 					local.isSynced = globalKeys.has(local.normalizedName);
+				}
+				for (const global of globalSkills) {
+					global.isSynced = localKeys.has(global.normalizedName);
 				}
 
 				const gapResult = gapAnalyzer.analyze(activeSkills, globalSkills);
 				skills = [...activeSkills, ...globalSkills, ...gapResult.missing];
 
-				const installedSet = new Set(skills.filter(s => s.status !== "missing").map(s => s.name));
+				const installedSet = buildInstalledKeySet(skills);
 				marketplaceProvider.setInstalledSkills(installedSet);
 
 				hoverProvider.updateSkills(skills);
@@ -182,26 +203,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	}
 
 	async function importSkill(skill: SkillDefinition): Promise<void> {
-		if (skill.status === "missing") {
-			const currentConfig = configService.getConfig();
-			const targetPath: string = currentConfig.targetImportPath || ".agent/skills";
-			const targetDir = path.join(workspaceRoot, targetPath);
-			const success = await gapAnalyzer.importSkill(skill, targetDir);
-			if (success) {
-				analytics.totalImported++;
-				await saveAnalytics(context.globalState, analytics);
-				vscode.window.showInformationMessage(`Skill "${skill.name}" imported to workspace!`);
-				await performScan();
-			}
-		} else {
-			const globalDir = resolveGlobalSkillsPath();
-			const success = await gapAnalyzer.importSkill(skill, globalDir);
-			if (success) {
-				analytics.totalImported++;
-				await saveAnalytics(context.globalState, analytics);
-				vscode.window.showInformationMessage(`Skill "${skill.name}" copied to My Skills!`);
-				await performScan();
-			}
+		const skillKey = skill.normalizedName || skill.name.toLowerCase().replace(/\s+/g, "");
+		if (importingSkillKeys.has(skillKey)) {
+			vscode.window.showInformationMessage(`Skill "${skill.name}" is currently importing.`);
+			return;
+		}
+
+		importingSkillKeys.add(skillKey);
+
+		try {
+			await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: `Importing ${skill.name}...`,
+					cancellable: false
+				},
+				async () => {
+					if (skill.status === "missing" || skill.status === "imported") {
+						const currentConfig = configService.getConfig();
+						const targetPath: string = currentConfig.targetImportPath || ".agent/skills";
+						const targetDir = path.join(workspaceRoot, targetPath);
+						const success = await gapAnalyzer.importSkill(skill, targetDir);
+						if (success) {
+							analytics.totalImported++;
+							await saveAnalytics(context.globalState, analytics);
+							vscode.window.showInformationMessage(`Skill "${skill.name}" imported to workspace!`);
+							await performScan();
+						}
+					} else {
+						const globalDir = resolveGlobalSkillsPath();
+						const success = await gapAnalyzer.importSkill(skill, globalDir);
+						if (success) {
+							analytics.totalImported++;
+							await saveAnalytics(context.globalState, analytics);
+							vscode.window.showInformationMessage(`Skill "${skill.name}" copied to My Skills!`);
+							await performScan();
+						}
+					}
+				}
+			);
+		} finally {
+			importingSkillKeys.delete(skillKey);
 		}
 	}
 
@@ -211,7 +253,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		})
 	);
 
-	/** 
+	/**
 	 * Extracts a SkillDefinition from various argument shapes:
 	 * - TreeItem inline button: passes the TreeItem which has a `.skill` property
 	 * - Direct SkillDefinition object with `.path`
@@ -298,26 +340,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.commands.registerCommand(
 			"open-skills.importAllMissingSkills",
 			async () => {
+				if (isImportingAllMissing) {
+					vscode.window.showInformationMessage("Missing skills are currently importing.");
+					return;
+				}
+
 				const missingSkills = skills.filter(s => s.status === "missing");
 				if (missingSkills.length === 0) {
 					return;
 				}
 
-				const currentConfig = configService.getConfig();
-				const targetPath: string = currentConfig.targetImportPath || ".agent/skills";
-				const targetDir = path.join(workspaceRoot, targetPath);
+				isImportingAllMissing = true;
 
-				const results = await Promise.all(
-					missingSkills.map(skill => gapAnalyzer.importSkill(skill, targetDir))
-				);
+				try {
+					const currentConfig = configService.getConfig();
+					const targetPath: string = currentConfig.targetImportPath || ".agent/skills";
+					const targetDir = path.join(workspaceRoot, targetPath);
 
-				const imported = results.filter(Boolean).length;
+					const results = await vscode.window.withProgress(
+						{
+							location: vscode.ProgressLocation.Notification,
+							title: "Importing missing skills...",
+							cancellable: false
+						},
+						async (progress) => {
+							const importResults: boolean[] = [];
+							const total = missingSkills.length;
+							for (let i = 0; i < missingSkills.length; i++) {
+								const skill = missingSkills[i];
+								progress.report({
+									message: `${i + 1}/${total}: ${skill.name}`,
+									increment: 100 / total,
+								});
+								importResults.push(await gapAnalyzer.importSkill(skill, targetDir));
+							}
+							return importResults;
+						}
+					);
 
-				if (imported > 0) {
-					analytics.totalImported += imported;
-					await saveAnalytics(context.globalState, analytics);
-					vscode.window.showInformationMessage(`Successfully imported ${imported} missing skill${imported > 1 ? 's' : ''}!`);
-					await performScan();
+					const imported = results.filter(Boolean).length;
+
+					if (imported > 0) {
+						analytics.totalImported += imported;
+						await saveAnalytics(context.globalState, analytics);
+						vscode.window.showInformationMessage(`Successfully imported ${imported} missing skill${imported > 1 ? 's' : ''}!`);
+						await performScan();
+					}
+				} finally {
+					isImportingAllMissing = false;
 				}
 			}
 		)
@@ -368,18 +438,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				return;
 			}
 
+			const normalizedSkill = normalizeSkillKey(skill.name);
+			const marketplacePathKey = getMarketplacePathKey(skill.skillPath);
+			const alreadyPresent = skills.some(s =>
+				s.status !== "missing" &&
+				(
+					s.normalizedName === normalizedSkill ||
+					getFolderSkillKey(s.path) === normalizedSkill ||
+					s.normalizedName === marketplacePathKey ||
+					getFolderSkillKey(s.path) === marketplacePathKey
+				)
+			);
+			if (alreadyPresent) {
+				vscode.window.showInformationMessage(`Skill "${skill.name}" is already available in local or My Skills.`);
+				return;
+			}
+
 			await vscode.window.withProgress({
 				location: vscode.ProgressLocation.Notification,
 				title: `Installing ${skill.name}...`,
 				cancellable: false
 			}, async () => {
 				try {
-					const files = await githubClient.fetchSkillFiles(skill);
-
 					const currentConfig = configService.getConfig();
 					const targetPath = path.normalize(currentConfig.targetImportPath || ".agent/skills");
 
 					const skillDir = vscode.Uri.file(path.join(workspaceRoot, targetPath, skill.name));
+					try {
+						await vscode.workspace.fs.stat(skillDir);
+						vscode.window.showInformationMessage(`Skill "${skill.name}" already exists in local workspace.`);
+						return;
+					} catch {
+						// Directory does not exist, proceed with install.
+					}
+
+					const files = await githubClient.fetchSkillFiles(skill);
 					await vscode.workspace.fs.createDirectory(skillDir);
 
 					for (const file of files) {
@@ -397,7 +490,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 					vscode.window.showInformationMessage(`Successfully installed ${skill.name}!`);
 					await performScan();
 
-					const installedSet = new Set(skills.filter(s => s.status !== "missing").map(s => s.name));
+					const installedSet = buildInstalledKeySet(skills);
 					marketplaceProvider.setInstalledSkills(installedSet);
 
 				} catch (error) {
@@ -425,8 +518,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 					});
 				}
 
+				const normalizedSkill = normalizeSkillKey(skill.name);
+				const marketplacePathKey = getMarketplacePathKey(skill.skillPath);
 				const isInstalled = skills.some(s =>
-					s.normalizedName === skill.name.toLowerCase().replace(/\s+/g, "") && s.status !== "missing"
+					s.status !== "missing" &&
+					(
+						s.normalizedName === normalizedSkill ||
+						getFolderSkillKey(s.path) === normalizedSkill ||
+						s.normalizedName === marketplacePathKey ||
+						getFolderSkillKey(s.path) === marketplacePathKey
+					)
 				);
 
 				const instance = SkillViewPanel.createOrShow(
