@@ -27,6 +27,10 @@ function normalizePath(p: string): string {
   return p.split(path.sep).join("/").toLowerCase();
 }
 
+function canonicalSkillKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export class SkillScanner {
   private readonly workspaceRoot: string;
   private readonly customPaths: string[];
@@ -145,7 +149,7 @@ export class SkillScanner {
       return {
         id: this.generateId(filePath),
         name: extractedName,
-        normalizedName: extractedName.toLowerCase().replace(/\s+/g, ""),
+        normalizedName: canonicalSkillKey(extractedName),
         path: filePath,
         description: this.extractDescription(text),
         dependencies: this.extractDependencies(text),

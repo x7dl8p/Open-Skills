@@ -141,4 +141,22 @@ export const DEFAULT_SKILL_REPOSITORIES: ReadonlyArray<{
             path: "skills",
             branch: "main"
         },
+        {
+            owner: "affaan-m",
+            repo: "everything-claude-code",
+            path: "skills",
+            branch: "main"
+        },
+        {
+            owner: "sickn33",
+            repo: "antigravity-awesome-skills",
+            path: "skills",
+            branch: "main"
+        },
+        {
+            owner: "github",
+            repo: "awesome-copilot",
+            path: "skills",
+            branch: "main"
+        },
     ];
