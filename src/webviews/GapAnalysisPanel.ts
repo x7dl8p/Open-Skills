@@ -35,6 +35,10 @@ export class GapAnalysisPanel {
       if (msg.type === "import" && msg.skill) {
         await this.onImport(msg.skill as SkillDefinition);
         this.onRefresh?.();
+      } else if (msg.type === "refresh") {
+        this.onRefresh?.();
+      } else if (msg.type === "fetchAll") {
+        vscode.commands.executeCommand("open-skills.fetchAllMarketplace");
       }
     });
   }
@@ -45,11 +49,13 @@ export class GapAnalysisPanel {
     onImport: (skill: SkillDefinition) => Promise<void>,
     analytics?: SkillAnalytics,
     marketplaceCount?: number,
+    hasErrors?: boolean,
+    repoStats?: { loaded: number; total: number },
     onRefresh?: () => void,
   ): void {
     if (GapAnalysisPanel.currentPanel) {
       GapAnalysisPanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
-      GapAnalysisPanel.currentPanel.update(result, analytics, marketplaceCount);
+      GapAnalysisPanel.currentPanel.update(result, analytics, marketplaceCount, hasErrors, repoStats);
       return;
     }
 
@@ -66,15 +72,15 @@ export class GapAnalysisPanel {
       onImport,
       onRefresh,
     );
-    GapAnalysisPanel.currentPanel.update(result, analytics, marketplaceCount);
+    GapAnalysisPanel.currentPanel.update(result, analytics, marketplaceCount, hasErrors, repoStats);
     context.subscriptions.push(panel);
   }
 
-  update(result: GapAnalysisResult, analytics?: SkillAnalytics, marketplaceCount?: number): void {
-    this.panel.webview.html = this.buildHtml(result, analytics, marketplaceCount);
+  update(result: GapAnalysisResult, analytics?: SkillAnalytics, marketplaceCount?: number, hasErrors?: boolean, repoStats?: { loaded: number; total: number }): void {
+    this.panel.webview.html = this.buildHtml(result, analytics, marketplaceCount, hasErrors, repoStats);
   }
 
-  private buildHtml(result: GapAnalysisResult, analytics?: SkillAnalytics, marketplaceCount?: number): string {
+  private buildHtml(result: GapAnalysisResult, analytics?: SkillAnalytics, marketplaceCount?: number, hasErrors?: boolean, repoStats?: { loaded: number; total: number }): string {
     const { present, missing, coveragePercentage } = result;
 
     const logoPath = vscode.Uri.file(
@@ -227,15 +233,34 @@ export class GapAnalysisPanel {
 </head>
 <body>
   <div class="header">
-    <img src="${logoUri}" alt="Open Skills" class="logo">
-    <h1>Open Skills Dashboard</h1>
+    <div style="display: flex; align-items: center; gap: 16px; flex: 1;">
+      <img src="${logoUri}" alt="Open Skills" class="logo">
+      <div>
+        <h1>Open Skills Dashboard</h1>
+        <p class="subtitle" style="margin-bottom: 0;">Unified view of your workspace skills, gaps, and marketplace analytics.</p>
+      </div>
+    </div>
+    <button class="vscode-button" id="refresh-all" style="background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M13.6 2.3C12.2.9 10.2 0 8 0 3.6 0 0 3.6 0 8s3.6 8 8 8c3.7 0 6.8-2.5 7.7-6h-2.1c-.8 2.3-3 4-5.6 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.7 0 3.1.7 4.2 1.8L10 6h6V0l-2.4 2.3z"/></svg>
+      Refresh
+    </button>
   </div>
-  <p class="subtitle">Unified view of your workspace skills, gaps, and marketplace analytics.</p>
 
   <div class="analytics-grid">
-    <div class="analytics-card">
-      <span class="value">${mpCount}</span>
-      <span class="label">Available in Marketplace</span>
+    <div class="analytics-card" style="position: relative;">
+      ${repoStats && repoStats.loaded < repoStats.total
+        ? `
+          <span class="value" style="color: var(--vscode-descriptionForeground); font-size: 24px;">${repoStats.loaded}/${repoStats.total}</span>
+          <span class="label">Repos Loaded</span>
+          <div style="margin-top: 8px;">
+            <button class="vscode-button" id="fetch-all-mp" style="padding: 2px 8px; font-size: 10px;">Fetch Marketplace</button>
+          </div>
+        `
+        : `
+          <span class="value">${mpCount}</span>
+          <span class="label">Available in Marketplace</span>
+        `
+      }
     </div>
     <div class="analytics-card">
       <span class="value">${installed}</span>
@@ -251,6 +276,21 @@ export class GapAnalysisPanel {
     </div>
   </div>
 
+  ${hasErrors
+        ? `
+    <div class="coverage-bar-wrap" style="text-align: center; background: rgba(255, 152, 0, 0.1); border-color: var(--vscode-editorWarning-foreground); margin-bottom: 32px;">
+      <div style="font-size: 16px; font-weight: 600; color: var(--vscode-editorWarning-foreground); display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M7.561 2.03a1 1 0 0 1 1.788 0l5.855 10.59a1 1 0 0 1-.894 1.48H2.6a1 1 0 0 1-.894-1.48L7.561 2.03zM8 5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 5zm0 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+        Marketplace partially unavailable
+      </div>
+      <div style="font-size: 13px; color: var(--vscode-foreground); margin-top: 4px;">
+        Some repositories failed to load (most likely GitHub rate limiting), Try again later 
+      </div>
+    </div>
+    `
+        : ''
+      }
+
   <div class="coverage-bar-wrap">
     <div class="coverage-label">
       <span>Workspace Skill Coverage</span>
@@ -259,8 +299,11 @@ export class GapAnalysisPanel {
     <div class="bar-bg">
       <div class="bar-fill" style="width: ${coveragePercentage}%"></div>
     </div>
-    <div style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 12px;">
-      Total Available Skills across all sources: ${present.length + missing.length} | Last Scan: ${lastScan}
+    <div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 12px; opacity: 0.8;">
+      Workspace Skills: <strong>${present.length}</strong> | 
+      Missing: <strong>${missing.length}</strong> | 
+      Total Marketplace: <strong>${mpCount}</strong> | 
+      Last Scan: ${lastScan}
     </div>
   </div>
 
@@ -281,7 +324,8 @@ export class GapAnalysisPanel {
       </tbody>
     </table>
   `
-        : `
+        : !hasErrors
+          ? `
     <div class="coverage-bar-wrap" style="text-align: center; background: rgba(76, 175, 80, 0.1); border-color: var(--vscode-testing-iconPassed);">
       <div style="font-size: 16px; font-weight: 600; color: var(--vscode-testing-iconPassed); display: flex; align-items: center; justify-content: center; gap: 8px;">
         <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
@@ -291,7 +335,17 @@ export class GapAnalysisPanel {
         Your workspace matches the global library and standard definitions.
       </div>
     </div>
-  `
+    `
+          : `
+    <div class="coverage-bar-wrap" style="text-align: center; background: rgba(255, 152, 0, 0.05); border-color: var(--vscode-panel-border);">
+      <div style="font-size: 15px; font-weight: 600; color: var(--vscode-descriptionForeground); display: flex; align-items: center; justify-content: center; gap: 8px;">
+        No missing skills found in available sources
+      </div>
+      <div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 4px;">
+        Some sources could not be reached, so this list might be incomplete.
+      </div>
+    </div>
+    `
       }
 
   <div class="section-title">Active Skills (${present.length})</div>
@@ -315,7 +369,7 @@ export class GapAnalysisPanel {
       'import-workspace': 'Importing...',
       'add-library': 'Adding...'
     };
-    document.querySelectorAll('.vscode-button').forEach(btn => {
+    document.querySelectorAll('.vscode-button[data-action]').forEach(btn => {
       btn.addEventListener('click', () => {
         const skill = JSON.parse(btn.getAttribute('data-skill'));
         const action = btn.getAttribute('data-action');
@@ -323,6 +377,14 @@ export class GapAnalysisPanel {
         btn.textContent = LOADING_LABELS[action] || 'Working...';
         vscode.postMessage({ type: 'import', skill });
       });
+    });
+
+    document.getElementById('refresh-all')?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'refresh' });
+    });
+
+    document.getElementById('fetch-all-mp')?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'fetchAll' });
     });
   </script>
 </body>

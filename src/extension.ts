@@ -600,21 +600,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				return {
 					result: gapAnalyzer.analyze(activeSkills, globalSkills),
 					marketplaceCount: marketplaceProvider.getSkills().length,
+					hasErrors: marketplaceProvider.hasLoadErrors(),
+					repoStats: marketplaceProvider.getRepoStats(),
 				};
 			};
 
-			const { result, marketplaceCount } = computeResult();
+			marketplaceProvider.onDidChangeTreeData(() => {
+				if (GapAnalysisPanel.currentPanel) {
+					const refreshed = computeResult();
+					GapAnalysisPanel.currentPanel.update(
+						refreshed.result,
+						analytics,
+						refreshed.marketplaceCount,
+						refreshed.hasErrors,
+						refreshed.repoStats
+					);
+				}
+			});
+
+			const { result, marketplaceCount, hasErrors, repoStats } = computeResult();
 			GapAnalysisPanel.createOrShow(
 				context,
 				result,
 				importSkill,
 				analytics,
 				marketplaceCount,
+				hasErrors,
+				repoStats,
 				() => {
 					const refreshed = computeResult();
-					GapAnalysisPanel.currentPanel?.update(refreshed.result, analytics, refreshed.marketplaceCount);
+					GapAnalysisPanel.currentPanel?.update(
+						refreshed.result, 
+						analytics, 
+						refreshed.marketplaceCount, 
+						refreshed.hasErrors,
+						refreshed.repoStats
+					);
 				},
 			);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("open-skills.fetchAllMarketplace", () => {
+			marketplaceProvider.prefetchAll();
 		})
 	);
 

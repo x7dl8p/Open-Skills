@@ -2,16 +2,16 @@
 
 A skill manager to make AI actually useful! Discover, visualize, and synchronize `SKILL.md` files across your workspace seamlessly.
 
-## Usage
-
-Go to:
+## Go to:
 
 <img width="653" alt="image" src="assets/os-1.png" />
 
 Basic enough for everyone to use. For those needing documentation to understand how to use it, please don't bother using it!
+
 <img width="1920"  alt="image" src="assets/os-2.png" />
 
-Dashboard:
+
+## Dashboard:
 <img width="1920" alt="image" src="assets/os-3.png" />
 
 ## Features
@@ -44,10 +44,11 @@ These repositories are indexed in the marketplace by default:
 | [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | `skills/` |
 | [sickn33/antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills) | `skills/` |
 | [github/awesome-copilot](https://github.com/github/awesome-copilot) | `skills/` |
+| [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) | `skills/` |
+| [mattpocock/skills](https://github.com/mattpocock/skills) | `skills/` |
+| [ComposioHQ/awesome-codex-skills](https://github.com/ComposioHQ/awesome-codex-skills) | root |
 
 You can add your own repositories via the **Add Repository** button in the Marketplace panel.
-
-want to add yours ?, add the repo in the contants.ts file and raise a PR !
 
 ## Developer Notes
 

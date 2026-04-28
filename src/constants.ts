@@ -159,4 +159,22 @@ export const DEFAULT_SKILL_REPOSITORIES: ReadonlyArray<{
             path: "skills",
             branch: "main"
         },
+        {
+            owner: "addyosmani",
+            repo: "agent-skills",
+            path: "skills",
+            branch: "main"
+        },
+        {
+            owner: "mattpocock",
+            repo: "skills",
+            path: "skills",
+            branch: "main"
+        },
+        {
+            owner: "ComposioHQ",
+            repo: "awesome-codex-skills",
+            path: "",
+            branch: "master"
+        },
     ];

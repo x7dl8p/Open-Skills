@@ -109,9 +109,9 @@ export class GitHubSkillsClient {
 
         if (!response.ok) {
             if (response.status === 404) {
-                throw new Error(`Repository or branch not found: ${owner}/${repo}@${branch}`);
+                throw new Error(`Repository or branch not found (404): ${owner}/${repo}@${branch}`);
             }
-            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+            throw new Error(`GITHUB_ERROR_${response.status}: ${response.statusText}`);
         }
 
         this.checkRateLimit(response);

@@ -9,7 +9,7 @@ export class CategoryTreeItem extends vscode.TreeItem {
         public readonly categoryNode: CategoryNode,
         public readonly repo: SkillRepository
     ) {
-        super(categoryNode.name, vscode.TreeItemCollapsibleState.Collapsed);
+        super(categoryNode.name || repo.branch, vscode.TreeItemCollapsibleState.Collapsed);
         this.description = `${categoryNode.skills.length} skill${categoryNode.skills.length !== 1 ? 's' : ''}`;
         this.iconPath = new vscode.ThemeIcon('folder');
         this.contextValue = 'marketplaceCategory';
@@ -40,7 +40,8 @@ export class RepoTreeItem extends vscode.TreeItem {
     constructor(
         public readonly repo: SkillRepository,
         public state: 'idle' | 'loading' | 'loaded' | 'error' = 'idle',
-        public skillCount: number = 0
+        public skillCount: number = 0,
+        public lastAttemptTime: number = 0
     ) {
         super(
             `${repo.owner}/${repo.repo}`,
@@ -112,7 +113,13 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
             const cacheKey = `${repoItem.repo.owner}/${repoItem.repo.repo}@${repoItem.repo.branch}`;
             if (this.treeCache.has(cacheKey) || repoItem.state === 'loading') { continue; }
 
+            const now = Date.now();
+            if (repoItem.state === 'error' && now - repoItem.lastAttemptTime < 5000) {
+                continue; 
+            }
+
             repoItem.state = 'loading';
+            repoItem.lastAttemptTime = now;
             repoItem.updateDescription();
             this._onDidChangeTreeData.fire(repoItem);
 
@@ -125,10 +132,15 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
                     repoItem.updateDescription();
                     this._onDidChangeTreeData.fire(repoItem);
                 })
-                .catch(() => {
+                .catch((err) => {
                     repoItem.state = 'error';
-                    repoItem.updateDescription();
+                    if (err?.message?.includes('GITHUB_ERROR_403')) {
+                        repoItem.description = 'rate limited';
+                    } else {
+                        repoItem.updateDescription();
+                    }
                     this._onDidChangeTreeData.fire(repoItem);
+                    setTimeout(() => this._onDidChangeTreeData.fire(repoItem), 5100);
                 });
         }
     }
@@ -156,6 +168,17 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
             }
         }
         return all;
+    }
+
+    hasLoadErrors(): boolean {
+        return this.repoItems.some(item => item.state === 'error');
+    }
+
+    getRepoStats(): { loaded: number; total: number } {
+        return {
+            loaded: this.repoItems.filter(i => i.state === 'loaded').length,
+            total: this.repoItems.length
+        };
     }
 
     searchSkills(query: string): Array<{ skill: MarketplaceSkill; installed: boolean }> {
@@ -213,7 +236,17 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
         const cacheKey = `${repoItem.repo.owner}/${repoItem.repo.repo}@${repoItem.repo.branch}`;
 
         if (!this.treeCache.has(cacheKey)) {
+            const now = Date.now();
+            if (repoItem.state === 'error' && now - repoItem.lastAttemptTime < 5000) {
+                const waitSecs = Math.ceil((5000 - (now - repoItem.lastAttemptTime)) / 1000);
+                const msg = `Retrying in ${waitSecs}s...`;
+                const waitItem = new vscode.TreeItem(msg);
+                waitItem.iconPath = new vscode.ThemeIcon('clock');
+                return [waitItem as unknown as AnyItem];
+            }
+
             repoItem.state = 'loading';
+            repoItem.lastAttemptTime = now;
             repoItem.updateDescription();
             this._onDidChangeTreeData.fire(repoItem);
 
@@ -225,12 +258,17 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
                 repoItem.skillCount = categories.reduce((sum, c) => sum + c.skills.length, 0);
                 repoItem.updateDescription();
                 this._onDidChangeTreeData.fire(repoItem);
-            } catch {
+            } catch (err: any) {
                 repoItem.state = 'error';
                 repoItem.updateDescription();
                 this._onDidChangeTreeData.fire(repoItem);
-                const errItem = new vscode.TreeItem('Failed to load. Check network or token.');
+                const isRateLimit = err?.message?.includes('GITHUB_ERROR_403');
+                const msg = isRateLimit 
+                    ? 'GitHub rate limit exceeded. Please wait or add a token.' 
+                    : 'Failed to load. Check network or repository path.';
+                const errItem = new vscode.TreeItem(msg);
                 errItem.iconPath = new vscode.ThemeIcon('warning');
+                setTimeout(() => this._onDidChangeTreeData.fire(repoItem), 5100);
                 return [errItem as unknown as AnyItem];
             }
         }
@@ -258,7 +296,7 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
         for (let i = 0; i < names.length; i++) {
             const s = names[i].toLowerCase();
             for (let j = 0; j + 2 < s.length; j++) {
-                const c0 = s.charCodeAt(j)     - 97;
+                const c0 = s.charCodeAt(j) - 97;
                 const c1 = s.charCodeAt(j + 1) - 97;
                 const c2 = s.charCodeAt(j + 2) - 97;
                 if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25 || c2 < 0 || c2 > 25) { continue; }
@@ -282,10 +320,10 @@ export class MarketplaceTreeProvider implements vscode.TreeDataProvider<AnyItem>
         }
 
         const scores = new Int16Array(names.length);
-        const seen   = new Uint8Array(this.TSIZE);
+        const seen = new Uint8Array(this.TSIZE);
 
         for (let i = 0; i + 2 < q.length; i++) {
-            const c0 = q.charCodeAt(i)     - 97;
+            const c0 = q.charCodeAt(i) - 97;
             const c1 = q.charCodeAt(i + 1) - 97;
             const c2 = q.charCodeAt(i + 2) - 97;
             if (c0 < 0 || c0 > 25 || c1 < 0 || c1 > 25 || c2 < 0 || c2 > 25) { continue; }
